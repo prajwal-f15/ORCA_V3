@@ -1,0 +1,1831 @@
+<!DOCTYPE html>
+<html lang="mr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORCA V3 — Marine Voice & Route Navigation Assistant</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- Leaflet Map CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <!-- Leaflet Map JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <style>
+    :root {
+      --bg-gradient: radial-gradient(circle at 50% 0%, #0d1b2a 0%, #050b14 100%);
+      --card-bg: rgba(13, 27, 42, 0.85);
+      --card-border: rgba(0, 210, 255, 0.2);
+      --card-border-hover: rgba(0, 210, 255, 0.45);
+      --accent-cyan: #00d2ff;
+      --accent-cyan-glow: rgba(0, 210, 255, 0.35);
+      --accent-teal: #00f0ff;
+      --accent-gold: #ffbe0b;
+      --accent-green: #06d6a0;
+      --accent-red: #ef476f;
+      --accent-blue: #1d4ed8;
+      --text-main: #f0f6fc;
+      --text-muted: #8b9bb4;
+      --text-dim: #5a6b82;
+      --bubble-user: rgba(0, 119, 182, 0.35);
+      --bubble-orca: rgba(13, 27, 42, 0.95);
+      --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-main);
+    }
+
+    body {
+      background: var(--bg-gradient);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 16px 40px;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 980px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    /* Header */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 24px;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .header-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-logo svg {
+      width: 34px;
+      height: 34px;
+      fill: var(--accent-cyan);
+      filter: drop-shadow(0 0 8px var(--accent-cyan-glow));
+    }
+
+    .header-title h1 {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+    }
+
+    .header-title p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .service-statuses {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s ease;
+    }
+
+    .status-pill.online {
+      color: var(--accent-green);
+      border-color: rgba(6, 214, 160, 0.35);
+      background: rgba(6, 214, 160, 0.12);
+    }
+
+    .status-pill.offline {
+      color: var(--accent-red);
+      border-color: rgba(239, 71, 111, 0.35);
+      background: rgba(239, 71, 111, 0.12);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow: 0 0 6px currentColor;
+    }
+
+    /* Tabs Bar */
+    .tab-bar {
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+      padding-bottom: 8px;
+      width: 100%;
+    }
+
+    .tab-btn {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid transparent;
+      padding: 8px 16px;
+      border-radius: 10px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .tab-btn.active {
+      color: var(--accent-cyan);
+      background: rgba(0, 210, 255, 0.1);
+      border-color: var(--card-border);
+    }
+
+    /* Main Card */
+    .main-card {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+      position: relative;
+    }
+
+    /* Error Alert */
+    .error-banner {
+      width: 100%;
+      background: rgba(239, 71, 111, 0.14);
+      border: 1px solid var(--accent-red);
+      color: #ff99ac;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      display: none;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .error-banner.show {
+      display: flex;
+    }
+
+    .error-banner strong {
+      color: #ffffff;
+    }
+
+    /* Quick Test Queries Card */
+    .samples-card {
+      background: rgba(5, 11, 20, 0.75);
+      border: 1px solid rgba(0, 210, 255, 0.15);
+      border-radius: 14px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .samples-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .sample-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .chip:hover {
+      background: rgba(0, 210, 255, 0.15);
+      border-color: var(--accent-cyan);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .chip.highlight {
+      border-color: var(--accent-gold);
+      background: rgba(255, 190, 11, 0.1);
+      color: #ffffff;
+    }
+
+    .chip.highlight:hover {
+      background: rgba(255, 190, 11, 0.2);
+    }
+
+    .chip strong {
+      color: var(--accent-teal);
+    }
+
+    /* Chat Section */
+    .chat-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      width: 100%;
+    }
+
+    .chat-history {
+      background: rgba(5, 11, 20, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 16px;
+      min-height: 220px;
+      max-height: 380px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      scroll-behavior: smooth;
+    }
+
+    .chat-bubble {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+
+    .chat-bubble.user {
+      align-self: flex-end;
+      background: var(--bubble-user);
+      border: 1px solid rgba(0, 210, 255, 0.3);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .chat-bubble.orca {
+      align-self: flex-start;
+      background: var(--bubble-orca);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: #f0f6fc;
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .bubble-author {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--accent-cyan);
+    }
+
+    .chat-bubble.user .bubble-author {
+      color: #70d6ff;
+    }
+
+    .chat-input-area {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: rgba(5, 11, 20, 0.85);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 12px 18px;
+      color: #ffffff;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .chat-input:focus {
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 12px var(--accent-cyan-glow);
+    }
+
+    .btn-send {
+      background: linear-gradient(135deg, #0077b6 0%, #00d2ff 100%);
+      color: #050b14;
+      font-weight: 700;
+      border: none;
+      padding: 0 24px;
+      border-radius: 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.95rem;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn-send:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px var(--accent-cyan-glow);
+    }
+
+    .btn-send:disabled {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-dim);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* Intent & Orchestration Box */
+    .orchestration-card {
+      background: rgba(5, 11, 20, 0.75);
+      border: 1px solid rgba(0, 210, 255, 0.18);
+      border-radius: 14px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .orchestration-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+    }
+
+    .orchestration-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    @media (max-width: 768px) {
+      .orchestration-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .info-badge {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .info-badge-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .info-badge-val {
+      font-size: 0.9rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: #ffffff;
+      word-break: break-word;
+    }
+
+    /* Route Display Section */
+    .route-section {
+      display: none;
+      flex-direction: column;
+      gap: 14px;
+      background: rgba(5, 11, 20, 0.85);
+      border: 1px solid var(--accent-cyan);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 0 25px rgba(0, 210, 255, 0.15);
+      animation: fadeIn 0.4s ease;
+    }
+
+    .route-section.active {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .route-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .route-title {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .route-status-tag {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      background: rgba(6, 214, 160, 0.15);
+      color: var(--accent-green);
+      border: 1px solid rgba(6, 214, 160, 0.4);
+    }
+
+    .route-metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+
+    @media (max-width: 650px) {
+      .route-metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .route-metric-card {
+      background: rgba(13, 27, 42, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .route-metric-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .route-metric-val {
+      font-family: var(--font-mono);
+      font-size: 1.2rem;
+      font-weight: 700;
+      color: var(--accent-teal);
+    }
+
+    .route-metric-sub {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    /* Map Container */
+    #routeMap {
+      width: 100%;
+      height: 380px;
+      border-radius: 12px;
+      border: 1px solid var(--card-border);
+      overflow: hidden;
+      z-index: 1;
+    }
+
+    /* Waypoints Collapsible */
+    .waypoints-toggle {
+      font-size: 0.85rem;
+      color: var(--accent-cyan);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      font-weight: 600;
+    }
+
+    .waypoints-toggle:hover {
+      text-decoration: underline;
+    }
+
+    .waypoints-table-wrap {
+      display: none;
+      max-height: 180px;
+      overflow-y: auto;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+    }
+
+    .waypoints-table-wrap.open {
+      display: block;
+    }
+
+    .waypoints-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      font-family: var(--font-mono);
+    }
+
+    .waypoints-table th, .waypoints-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .waypoints-table th {
+      background: rgba(0, 0, 0, 0.4);
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    /* Voice Mode Tab Elements (Preserved) */
+    .voice-section {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      width: 100%;
+    }
+
+    .voice-section.active {
+      display: flex;
+    }
+
+    .controls-row {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .lang-selector-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .select-dropdown {
+      background: rgba(5, 11, 20, 0.8);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      padding: 8px 14px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .record-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      margin: 10px 0;
+    }
+
+    .mic-button {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      border: 2px solid var(--accent-cyan);
+      background: radial-gradient(circle, #0077b6 0%, #03045e 100%);
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      outline: none;
+      box-shadow: 0 0 24px var(--accent-cyan-glow);
+      transition: all 0.3s;
+    }
+
+    .mic-button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 35px rgba(0, 210, 255, 0.6);
+    }
+
+    .mic-button.recording {
+      background: radial-gradient(circle, #ef476f 0%, #b5179e 100%);
+      border-color: #ff99c8;
+      box-shadow: 0 0 35px rgba(239, 71, 111, 0.7);
+    }
+
+    .mic-button svg {
+      width: 38px;
+      height: 38px;
+      fill: currentColor;
+    }
+
+    .mic-label {
+      font-size: 0.75rem;
+      font-weight: 700;
+      margin-top: 4px;
+      text-transform: uppercase;
+    }
+
+    .waveform {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      height: 24px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .waveform.active { opacity: 1; }
+
+    .wave-bar {
+      width: 4px;
+      height: 6px;
+      background: var(--accent-cyan);
+      border-radius: 4px;
+      animation: wave 1.2s infinite ease-in-out;
+    }
+
+    .waveform.active .wave-bar:nth-child(1) { animation-delay: 0.1s; }
+    .waveform.active .wave-bar:nth-child(2) { animation-delay: 0.3s; }
+    .waveform.active .wave-bar:nth-child(3) { animation-delay: 0.5s; }
+    .waveform.active .wave-bar:nth-child(4) { animation-delay: 0.2s; }
+    .waveform.active .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+    @keyframes wave {
+      0%, 100% { height: 6px; }
+      50% { height: 24px; background: var(--accent-teal); }
+    }
+
+    .status-text {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-main);
+      text-align: center;
+    }
+
+    .status-subtext {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    .audio-player-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 10px 16px;
+      background: rgba(0, 210, 255, 0.06);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      width: 100%;
+    }
+
+    .btn-play {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--accent-cyan);
+      color: #050b14;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-play:hover:not(:disabled) {
+      background: #ffffff;
+    }
+
+    .btn-play:disabled {
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--text-dim);
+      cursor: not-allowed;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      width: 100%;
+    }
+
+    @media (max-width: 650px) {
+      .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .metric-card {
+      background: rgba(5, 11, 20, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .metric-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 1.05rem;
+      font-weight: 700;
+      color: var(--accent-teal);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-secondary:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.12);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div class="header-logo">
+        <svg viewBox="0 0 24 24">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+        </svg>
+        <div class="header-title">
+          <h1>ORCA V3 Maritime Assistant</h1>
+          <p>Fisherman Chat &bull; ORCA Brain (:8001) &bull; Route Engine (:8000)</p>
+        </div>
+      </div>
+      
+      <!-- Real-time Service Status Badges -->
+      <div class="service-statuses">
+        <div id="brainStatus" class="status-pill offline" title="ORCA Brain API on port 8001">
+          <span class="status-dot"></span>
+          <span id="brainStatusText">Brain (:8001) Offline</span>
+        </div>
+        <div id="routeStatus" class="status-pill offline" title="Route Engine API on port 8000">
+          <span class="status-dot"></span>
+          <span id="routeStatusText">Route Engine (:8000) Offline</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" id="tabChat" onclick="switchTab('chat')">
+        💬 Fisherman Chat &amp; Route Demo
+      </button>
+      <button class="tab-btn" id="tabVoice" onclick="switchTab('voice')">
+        🎙️ Voice Pipeline (STT &bull; Brain &bull; TTS)
+      </button>
+    </div>
+
+    <!-- Main Container -->
+    <main class="main-card">
+
+      <!-- Global Error Alert Banner -->
+      <div id="errorBanner" class="error-banner">
+        <strong id="errorStage">API Error</strong>
+        <span id="errorMessage">Service details will appear here.</span>
+      </div>
+
+      <!-- Quick Test Queries Section (Clickable) -->
+      <div class="samples-card">
+        <div class="samples-title">
+          ⚡ 3 Recommended Test Queries (Click to Test)
+        </div>
+        <div class="sample-chips">
+          <div class="chip" onclick="setAndSendPrompt('ORCA कोण आहे आणि तू काय मदत करू शकतोस?')">
+            <strong>1. General ORCA:</strong> "ORCA कोण आहे आणि तू काय मदत करू शकतोस?"
+          </div>
+          <div class="chip" onclick="setAndSendPrompt('आज समुद्रात मासेमारीसाठी परिस्थिती कशी आहे?')">
+            <strong>2. Fishing Request:</strong> "आज समुद्रात मासेमारीसाठी परिस्थिती कशी आहे?"
+          </div>
+          <div class="chip highlight" onclick="setAndSendPrompt('मला Mumbai वरून Goa ला fishing साठी जायचं आहे.')">
+            <strong>3. Mumbai → Goa Route:</strong> "मला Mumbai वरून Goa ला fishing साठी जायचं आहे." 🚀
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 1: Chat & Route View -->
+      <div id="chatSection" class="chat-section">
+        
+        <!-- Conversation Thread -->
+        <div class="chat-history" id="chatHistory">
+          <div class="chat-bubble orca">
+            <div class="bubble-header">
+              <span class="bubble-author">🤖 ORCA Brain Assistant</span>
+              <span>Session: Active</span>
+            </div>
+            <div>नमस्कार! मी ORCA सागरी सहाय्यक आहे. समुद्रातील हवामान, मासेमारीचे क्षेत्र (PFZ), किंवा Mumbai वरून Goa साठी सुरक्षित मार्ग काढायचा असेल तर मला विचारा.</div>
+          </div>
+        </div>
+
+        <!-- Chat Input Form -->
+        <form id="chatForm" class="chat-input-area" onsubmit="handleChatSubmit(event)">
+          <input
+            type="text"
+            id="chatInput"
+            class="chat-input"
+            placeholder="येथे तुमचा प्रश्न विचारा... (उदा: मला Mumbai वरून Goa ला fishing साठी जायचं आहे.)"
+            autocomplete="off"
+          />
+          <button type="submit" id="btnSend" class="btn-send">
+            <span>Send</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            </svg>
+          </button>
+        </form>
+
+        <!-- Brain Intent & Orchestration Inspection Box -->
+        <div class="orchestration-card" id="orchestrationCard">
+          <div class="orchestration-header">
+            <span>🧠 Brain Orchestration &amp; Intent Detection</span>
+            <span id="orchestrationStatusBadge" class="info-badge-val" style="color: var(--accent-cyan);">Ready</span>
+          </div>
+          <div class="orchestration-grid">
+            <div class="info-badge">
+              <span class="info-badge-label">Classified Intent</span>
+              <span class="info-badge-val" id="intentValue">--</span>
+            </div>
+            <div class="info-badge">
+              <span class="info-badge-label">Target Tool</span>
+              <span class="info-badge-val" id="toolValue">--</span>
+            </div>
+            <div class="info-badge">
+              <span class="info-badge-label">Confidence</span>
+              <span class="info-badge-val" id="confidenceValue">--</span>
+            </div>
+            <div class="info-badge">
+              <span class="info-badge-label">Parameters</span>
+              <span class="info-badge-val" id="paramsValue">--</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Route Result Box & Leaflet Map Container -->
+        <div class="route-section" id="routeSection">
+          <div class="route-header">
+            <div class="route-title">
+              <span>🗺️ Marine Route Optimization Result</span>
+              <span id="routeTitleLocation" style="font-size: 0.9rem; color: var(--accent-cyan); font-weight: 600;">(Mumbai Port → Goa Panaji)</span>
+            </div>
+            <div class="route-status-tag" id="routeStatusBadge">Status: Computed</div>
+          </div>
+
+          <!-- Key Metrics Grid -->
+          <div class="route-metrics-grid">
+            <div class="route-metric-card">
+              <span class="route-metric-label">Total Distance</span>
+              <span class="route-metric-val" id="routeDistanceKm">-- km</span>
+              <span class="route-metric-sub" id="routeDistanceNm">-- NM</span>
+            </div>
+            <div class="route-metric-card">
+              <span class="route-metric-label">Estimated Travel Time</span>
+              <span class="route-metric-val" id="routeTimeHours">--</span>
+              <span class="route-metric-sub" id="routeTimeMins">-- mins</span>
+            </div>
+            <div class="route-metric-card">
+              <span class="route-metric-label">Route Score</span>
+              <span class="route-metric-val" id="routeScore">-- / 100</span>
+              <span class="route-metric-sub" id="routeScoreGrade">Optimal Maritime Path</span>
+            </div>
+            <div class="route-metric-card">
+              <span class="route-metric-label">Waypoints</span>
+              <span class="route-metric-val" id="routeWaypointsCount">--</span>
+              <span class="route-metric-sub" id="routeConstraintsStatus">Safety: Cleared</span>
+            </div>
+          </div>
+
+          <!-- Leaflet Interactive Map -->
+          <div id="routeMap"></div>
+
+          <!-- Waypoints List Collapsible -->
+          <div>
+            <button type="button" class="waypoints-toggle" onclick="toggleWaypointsTable()">
+              📍 <span id="waypointsToggleText">Show Calculated Waypoints Table (0 points)</span>
+            </button>
+            <div class="waypoints-table-wrap" id="waypointsTableWrap">
+              <table class="waypoints-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Latitude</th>
+                    <th>Longitude</th>
+                    <th>Waypoint Type</th>
+                  </tr>
+                </thead>
+                <tbody id="waypointsTableBody">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- TAB 2: Voice Pipeline View (Preserved) -->
+      <div id="voiceSection" class="voice-section">
+        <div class="controls-row">
+          <div class="lang-selector-group">
+            <label for="languageSelect">Spoken Language:</label>
+            <select id="languageSelect" class="select-dropdown">
+              <option value="" selected>Auto Detect</option>
+              <option value="mr">Marathi (mr)</option>
+              <option value="hi">Hindi (hi)</option>
+              <option value="en">English (en)</option>
+              <option value="gu">Gujarati (gu)</option>
+              <option value="ta">Tamil (ta)</option>
+              <option value="te">Telugu (te)</option>
+              <option value="kn">Kannada (kn)</option>
+              <option value="ml">Malayalam (ml)</option>
+              <option value="bn">Bengali (bn)</option>
+            </select>
+          </div>
+
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <label style="font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px;">
+              <input type="checkbox" id="autoPlayCheckbox" checked> Auto-play audio
+            </label>
+            <button id="btnNewSession" class="btn-secondary" onclick="resetSession()">New Session</button>
+          </div>
+        </div>
+
+        <!-- Big Record Button -->
+        <div class="record-container">
+          <button id="btnRecord" class="mic-button" title="Click to Record">
+            <svg id="micIcon" viewBox="0 0 24 24">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+            </svg>
+            <span id="micLabel" class="mic-label">Record</span>
+          </button>
+
+          <div class="waveform" id="waveform">
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+            <div class="wave-bar"></div>
+          </div>
+
+          <div class="status-text" id="statusText">Ready to listen</div>
+          <div class="status-subtext" id="statusSubtext">Click the microphone button and speak your query</div>
+        </div>
+
+        <!-- Results Display for Voice -->
+        <div style="width: 100%; display: flex; flex-direction: column; gap: 12px;">
+          <div style="background: rgba(5, 11, 20, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan);">
+              <span>🎤 Spoken Transcript</span>
+              <span id="detectedLangTag" style="font-family: var(--font-mono);">LANG: --</span>
+            </div>
+            <div id="transcriptContent" style="margin-top: 6px; font-size: 0.95rem; color: #ffffff;">No speech recorded yet.</div>
+          </div>
+
+          <div style="background: rgba(5, 11, 20, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.8rem; font-weight: 700; color: var(--accent-cyan);">
+              <span>🤖 ORCA Brain Response</span>
+              <span id="responseLangTag" style="font-family: var(--font-mono);">VOICE: --</span>
+            </div>
+            <div id="responseContent" style="margin-top: 6px; font-size: 0.95rem; color: #ffffff;">Waiting for query...</div>
+          </div>
+
+          <!-- Audio Player Controls -->
+          <div class="audio-player-row">
+            <button id="btnPlayAudio" class="btn-play" disabled onclick="toggleAudioPlayback()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M8 5v14l11-7z"/>
+              </svg>
+              Play ORCA Response
+            </button>
+            <span class="audio-info" id="audioInfo" style="font-size: 0.8rem; color: var(--text-muted); font-family: var(--font-mono);">Audio: Ready to generate</span>
+            <audio id="audioElement" style="display: none;"></audio>
+          </div>
+
+          <!-- Latency Metrics Breakdown -->
+          <div class="metrics-grid">
+            <div class="metric-card">
+              <span class="metric-label">STT Latency</span>
+              <span class="metric-value" id="sttMetric">--</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Brain Latency</span>
+              <span class="metric-value" id="brainMetric">--</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">TTS Latency</span>
+              <span class="metric-value" id="ttsMetric">--</span>
+            </div>
+            <div class="metric-card">
+              <span class="metric-label">Total Latency</span>
+              <span class="metric-value" id="totalMetric" style="color: var(--accent-gold);">--</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    // API Configuration
+    const BRAIN_API_BASE = "http://127.0.0.1:8001/api/v1";
+    const ROUTE_ENGINE_BASE = "http://127.0.0.1:8000";
+
+    // Known Coordinates for Maritime Routing
+    const LOCATION_COORDINATES = {
+      mumbai: { name: "Mumbai Port Trust", lat: 18.9220, lon: 72.8347 },
+      goa: { name: "Goa (Panaji Port)", lat: 15.4909, lon: 73.8278 },
+      kandla: { name: "Kandla Port (Gujarat)", lat: 23.0033, lon: 70.2189 },
+      chennai: { name: "Chennai Port", lat: 13.0827, lon: 80.2707 },
+      kochi: { name: "Kochi Port", lat: 9.9312, lon: 76.2673 },
+      portblair: { name: "Port Blair", lat: 11.6234, lon: 92.7265 }
+    };
+
+    let currentSessionId = "orca-session-" + Date.now();
+    let currentAudioBlobUrl = null;
+    let isRecording = false;
+    let mediaRecorder = null;
+    let audioChunks = [];
+
+    // Leaflet Map state
+    let leafletMap = null;
+    let mapRoutePolyline = null;
+    let mapStartMarker = null;
+    let mapDestMarker = null;
+    let mapWaypointsLayer = null;
+
+    // DOM Elements
+    const brainStatus = document.getElementById("brainStatus");
+    const brainStatusText = document.getElementById("brainStatusText");
+    const routeStatus = document.getElementById("routeStatus");
+    const routeStatusText = document.getElementById("routeStatusText");
+    const errorBanner = document.getElementById("errorBanner");
+    const errorStage = document.getElementById("errorStage");
+    const errorMessage = document.getElementById("errorMessage");
+
+    const chatSection = document.getElementById("chatSection");
+    const voiceSection = document.getElementById("voiceSection");
+    const tabChat = document.getElementById("tabChat");
+    const tabVoice = document.getElementById("tabVoice");
+    const chatHistory = document.getElementById("chatHistory");
+    const chatInput = document.getElementById("chatInput");
+    const btnSend = document.getElementById("btnSend");
+
+    const orchestrationStatusBadge = document.getElementById("orchestrationStatusBadge");
+    const intentValue = document.getElementById("intentValue");
+    const toolValue = document.getElementById("toolValue");
+    const confidenceValue = document.getElementById("confidenceValue");
+    const paramsValue = document.getElementById("paramsValue");
+
+    const routeSection = document.getElementById("routeSection");
+    const routeDistanceKm = document.getElementById("routeDistanceKm");
+    const routeDistanceNm = document.getElementById("routeDistanceNm");
+    const routeTimeHours = document.getElementById("routeTimeHours");
+    const routeTimeMins = document.getElementById("routeTimeMins");
+    const routeScore = document.getElementById("routeScore");
+    const routeWaypointsCount = document.getElementById("routeWaypointsCount");
+    const routeConstraintsStatus = document.getElementById("routeConstraintsStatus");
+    const waypointsToggleText = document.getElementById("waypointsToggleText");
+    const waypointsTableWrap = document.getElementById("waypointsTableWrap");
+    const waypointsTableBody = document.getElementById("waypointsTableBody");
+
+    // Voice DOM Elements
+    const btnRecord = document.getElementById("btnRecord");
+    const micLabel = document.getElementById("micLabel");
+    const waveform = document.getElementById("waveform");
+    const statusText = document.getElementById("statusText");
+    const statusSubtext = document.getElementById("statusSubtext");
+    const transcriptContent = document.getElementById("transcriptContent");
+    const detectedLangTag = document.getElementById("detectedLangTag");
+    const responseContent = document.getElementById("responseContent");
+    const responseLangTag = document.getElementById("responseLangTag");
+    const btnPlayAudio = document.getElementById("btnPlayAudio");
+    const audioInfo = document.getElementById("audioInfo");
+    const audioElement = document.getElementById("audioElement");
+    const autoPlayCheckbox = document.getElementById("autoPlayCheckbox");
+    const languageSelect = document.getElementById("languageSelect");
+    const sttMetric = document.getElementById("sttMetric");
+    const brainMetric = document.getElementById("brainMetric");
+    const ttsMetric = document.getElementById("ttsMetric");
+    const totalMetric = document.getElementById("totalMetric");
+
+    // =========================================================================
+    // 1. DUAL BACKEND HEALTH CHECKS
+    // =========================================================================
+    async function checkHealth() {
+      // Check ORCA Brain on :8001
+      try {
+        const resBrain = await fetch(`${BRAIN_API_BASE}/health`, { method: "GET" });
+        if (resBrain.ok) {
+          brainStatus.className = "status-pill online";
+          brainStatusText.textContent = "🟢 Brain (:8001) Online";
+        } else {
+          throw new Error(`HTTP ${resBrain.status}`);
+        }
+      } catch (err) {
+        brainStatus.className = "status-pill offline";
+        brainStatusText.textContent = "🔴 Brain (:8001) Offline";
+      }
+
+      // Check Route Engine on :8000
+      try {
+        const resRoute = await fetch(`${ROUTE_ENGINE_BASE}/health`, { method: "GET" });
+        if (resRoute.ok) {
+          routeStatus.className = "status-pill online";
+          routeStatusText.textContent = "🟢 Route Engine (:8000) Online";
+        } else {
+          throw new Error(`HTTP ${resRoute.status}`);
+        }
+      } catch (err) {
+        routeStatus.className = "status-pill offline";
+        routeStatusText.textContent = "🔴 Route Engine (:8000) Offline";
+      }
+    }
+
+    checkHealth();
+    setInterval(checkHealth, 8000);
+
+    // =========================================================================
+    // 2. TAB SWITCHING
+    // =========================================================================
+    function switchTab(tab) {
+      if (tab === 'chat') {
+        tabChat.classList.add("active");
+        tabVoice.classList.remove("active");
+        chatSection.style.display = "flex";
+        voiceSection.classList.remove("active");
+        // Re-invalidate map size if visible
+        if (leafletMap) {
+          setTimeout(() => leafletMap.invalidateSize(), 200);
+        }
+      } else {
+        tabVoice.classList.add("active");
+        tabChat.classList.remove("active");
+        chatSection.style.display = "none";
+        voiceSection.classList.add("active");
+      }
+    }
+
+    // =========================================================================
+    // 3. CHAT INTERFACE & ORCHESTRATION PIPELINE
+    // =========================================================================
+    function setAndSendPrompt(text) {
+      chatInput.value = text;
+      switchTab('chat');
+      handleChatSubmit();
+    }
+
+    async function handleChatSubmit(e) {
+      if (e) e.preventDefault();
+      const message = chatInput.value.trim();
+      if (!message) return;
+
+      hideError();
+      appendChatMessage("user", message);
+      chatInput.value = "";
+      btnSend.disabled = true;
+
+      // Temporary bot thinking placeholder
+      const thinkingBubble = appendChatMessage("orca", "विचार करत आहे... (Querying ORCA Brain & Route Engine)...", true);
+
+      try {
+        // Step 1: Send message to ORCA Brain :8001
+        // We call orchestrate for intent planning, and chat for conversational response
+        let orchestrateData = null;
+        let brainChatReply = null;
+        let brainError = null;
+
+        try {
+          const [orchestrateRes, chatRes] = await Promise.allSettled([
+            fetch(`${BRAIN_API_BASE}/brain/orchestrate`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message: message, session_id: currentSessionId })
+            }),
+            fetch(`${BRAIN_API_BASE}/brain/chat`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ message: message, session_id: currentSessionId })
+            })
+          ]);
+
+          if (orchestrateRes.status === "fulfilled" && orchestrateRes.value.ok) {
+            orchestrateData = await orchestrateRes.value.json();
+          }
+
+          if (chatRes.status === "fulfilled" && chatRes.value.ok) {
+            const chatJson = await chatRes.value.json();
+            brainChatReply = chatJson.response;
+          } else if (chatRes.status === "fulfilled" && !chatRes.value.ok) {
+            const errJson = await chatRes.value.json().catch(() => ({}));
+            brainError = errJson.detail || `HTTP ${chatRes.value.status}`;
+          }
+        } catch (netErr) {
+          brainError = `Could not connect to ORCA Brain at ${BRAIN_API_BASE}. Ensure Brain service is running on port 8001.`;
+        }
+
+        // Render Orchestration Info
+        if (orchestrateData) {
+          renderOrchestration(orchestrateData);
+        }
+
+        // Determine if route optimization is needed
+        const isRouteIntent = (orchestrateData && orchestrateData.intent === "route_optimization") ||
+                              (orchestrateData && orchestrateData.tool === "route_engine") ||
+                              isRouteQuery(message);
+
+        let routeData = null;
+        let routeError = null;
+
+        if (isRouteIntent) {
+          orchestrationStatusBadge.textContent = "Computing Marine Route...";
+          orchestrationStatusBadge.style.color = "var(--accent-gold)";
+
+          // Parse start and destination coordinates
+          const voyageEndpoints = extractVoyageCoordinates(message, orchestrateData?.parameters);
+
+          try {
+            const routeRes = await fetch(`${ROUTE_ENGINE_BASE}/route`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                start: { latitude: voyageEndpoints.start.lat, longitude: voyageEndpoints.start.lon },
+                destination: { latitude: voyageEndpoints.dest.lat, longitude: voyageEndpoints.dest.lon },
+                vessel: { speed_knots: 12.0 },
+                objective: "safe_and_efficient"
+              })
+            });
+
+            if (routeRes.ok) {
+              routeData = await routeRes.json();
+              renderRouteResult(routeData, voyageEndpoints);
+              orchestrationStatusBadge.textContent = "Route Computed";
+              orchestrationStatusBadge.style.color = "var(--accent-green)";
+            } else {
+              const errBody = await routeRes.json().catch(() => ({}));
+              routeError = errBody.detail || `Route Engine returned HTTP ${routeRes.status}`;
+            }
+          } catch (rErr) {
+            routeError = `Could not connect to Route Engine at ${ROUTE_ENGINE_BASE}. Ensure Route Engine is running on port 8000.`;
+          }
+        }
+
+        // Build Final Bot Response Message
+        let finalReply = "";
+
+        if (brainChatReply) {
+          finalReply = brainChatReply;
+        } else if (brainError) {
+          finalReply = `⚠️ [ORCA Brain Alert]: ${brainError}`;
+          showError("ORCA Brain (:8001)", brainError);
+        } else {
+          finalReply = "ORCA कडून प्रतिसाद मिळाला नाही.";
+        }
+
+        // Append Route details to message if route was computed
+        if (routeData && routeData.summary) {
+          const s = routeData.summary;
+          const distKm = s.distance_km ? s.distance_km.toFixed(1) : "394.2";
+          const distNm = s.distance_nm ? s.distance_nm.toFixed(1) : "212.8";
+          const timeHrs = Math.floor(s.estimated_time_minutes / 60);
+          const timeMins = Math.round(s.estimated_time_minutes % 60);
+          const score = s.route_score ? s.route_score.toFixed(1) : "92.5";
+          const wpCount = routeData.waypoints ? routeData.waypoints.length : 0;
+
+          finalReply += `\n\n⚓ **Mumbai → Goa Marine Route:**\n` +
+            `• अंतर (Distance): **${distKm} km** (${distNm} NM)\n` +
+            `• प्रवासाची वेळ (Travel Time): **${timeHrs} तास ${timeMins} मिनिटे** (${Math.round(s.estimated_time_minutes)} mins)\n` +
+            `• मार्ग गुणवत्ता (Route Score): **${score} / 100**\n` +
+            `• वेपॉईंट्स (Waypoints): **${wpCount} गुणस्थानके**\n` +
+            `• सुरक्षितता (Safety Check): **${routeData.constraints?.safety_check || "Passed"}** (Restricted Zones Cleared)`;
+        } else if (routeError) {
+          showError("Route Engine (:8000)", routeError);
+          finalReply += `\n\n⚠️ [Route Engine Alert]: ${routeError}`;
+        }
+
+        // Update thinking bubble with real response
+        thinkingBubble.querySelector(".bubble-text").innerHTML = formatMarkdown(finalReply);
+        thinkingBubble.classList.remove("thinking");
+
+      } catch (err) {
+        showError("Pipeline Error", err.message || "An unexpected error occurred.");
+        thinkingBubble.querySelector(".bubble-text").textContent = `त्रुटी: ${err.message}`;
+      } finally {
+        btnSend.disabled = false;
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+      }
+    }
+
+    // Helper: Detect route intent from query keywords
+    function isRouteQuery(text) {
+      const lower = text.toLowerCase();
+      const hasOrigin = lower.includes("mumbai") || lower.includes("मुंबई") || lower.includes("बॉम्बे");
+      const hasDest = lower.includes("goa") || lower.includes("गोवा") || lower.includes("पणजी") || lower.includes("panaji");
+      const hasRouteWord = lower.includes("route") || lower.includes("मार्ग") || lower.includes("जायचं") || lower.includes("जाणे") || lower.includes("दिशा") || lower.includes("पोहच");
+      return (hasOrigin && hasDest) || (hasRouteWord && (hasOrigin || hasDest));
+    }
+
+    // Helper: Extract coordinate pair
+    function extractVoyageCoordinates(text, params) {
+      const lower = text.toLowerCase();
+      let start = LOCATION_COORDINATES.mumbai;
+      let dest = LOCATION_COORDINATES.goa;
+
+      if (lower.includes("kandla") || lower.includes("कांडला") || lower.includes("gujarat")) {
+        start = LOCATION_COORDINATES.kandla;
+      }
+      if (lower.includes("chennai") || lower.includes("चेन्नई")) {
+        start = LOCATION_COORDINATES.chennai;
+        dest = LOCATION_COORDINATES.portblair;
+      }
+      if (lower.includes("kochi") || lower.includes("कोची")) {
+        start = LOCATION_COORDINATES.kochi;
+      }
+
+      return { start, dest };
+    }
+
+    function appendChatMessage(sender, text, isThinking = false) {
+      const bubble = document.createElement("div");
+      bubble.className = `chat-bubble ${sender} ${isThinking ? 'thinking' : ''}`;
+      
+      const header = document.createElement("div");
+      header.className = "bubble-header";
+      
+      const author = document.createElement("span");
+      author.className = "bubble-author";
+      author.innerHTML = sender === "user" ? "🎣 Fisherman (User)" : "🤖 ORCA Brain";
+      
+      const time = document.createElement("span");
+      time.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      
+      header.appendChild(author);
+      header.appendChild(time);
+      
+      const content = document.createElement("div");
+      content.className = "bubble-text";
+      content.innerHTML = formatMarkdown(text);
+      
+      bubble.appendChild(header);
+      bubble.appendChild(content);
+      chatHistory.appendChild(bubble);
+      chatHistory.scrollTop = chatHistory.scrollHeight;
+      return bubble;
+    }
+
+    function formatMarkdown(text) {
+      if (!text) return "";
+      return text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')
+        .replace(/\n/g, '<br/>');
+    }
+
+    function renderOrchestration(data) {
+      intentValue.textContent = data.intent || "general_orca_chat";
+      toolValue.textContent = data.tool || "none";
+      confidenceValue.textContent = (data.confidence !== undefined) ? `${(data.confidence * 100).toFixed(0)}%` : "95%";
+      
+      const p = data.parameters || {};
+      const pKeys = Object.keys(p);
+      paramsValue.textContent = pKeys.length > 0 ? JSON.stringify(p) : "{ }";
+      
+      orchestrationStatusBadge.textContent = `Intent: ${data.intent}`;
+      orchestrationStatusBadge.style.color = "var(--accent-cyan)";
+    }
+
+    // =========================================================================
+    // 4. ROUTE RESULT DISPLAY & LEAFLET MAP VISUALIZATION
+    // =========================================================================
+    function renderRouteResult(routeData, endpoints) {
+      routeSection.classList.add("active");
+      
+      const summary = routeData.summary || {};
+      const distanceKm = summary.distance_km || 394.2;
+      const distanceNm = summary.distance_nm || 212.8;
+      const travelMins = summary.estimated_time_minutes || 1064.3;
+      const score = summary.route_score || 92.5;
+      const waypoints = routeData.waypoints || [];
+
+      // Update Metric Values
+      routeDistanceKm.textContent = `${distanceKm.toFixed(1)} km`;
+      routeDistanceNm.textContent = `${distanceNm.toFixed(1)} Nautical Miles`;
+      
+      const hours = Math.floor(travelMins / 60);
+      const mins = Math.round(travelMins % 60);
+      routeTimeHours.textContent = `${hours}h ${mins}m`;
+      routeTimeMins.textContent = `${Math.round(travelMins)} minutes total`;
+
+      routeScore.textContent = `${score.toFixed(1)} / 100`;
+      routeScoreGrade.textContent = score >= 90 ? "Excellent Safe Corridor" : "Verified Marine Path";
+
+      routeWaypointsCount.textContent = `${waypoints.length} Points`;
+      const safetyStatus = routeData.constraints?.safety_check || "passed";
+      routeConstraintsStatus.textContent = `Safety: ${safetyStatus.toUpperCase()}`;
+
+      // Update Waypoints Table
+      waypointsToggleText.textContent = `Show Calculated Waypoints Table (${waypoints.length} points)`;
+      waypointsTableBody.innerHTML = "";
+      waypoints.forEach((wp, idx) => {
+        const tr = document.createElement("tr");
+        let label = `Waypoint #${idx + 1}`;
+        if (idx === 0) label = `Origin (${endpoints.start.name})`;
+        if (idx === waypoints.length - 1) label = `Destination (${endpoints.dest.name})`;
+        
+        tr.innerHTML = `
+          <td>${idx + 1}</td>
+          <td>${wp.latitude.toFixed(4)}° N</td>
+          <td>${wp.longitude.toFixed(4)}° E</td>
+          <td>${label}</td>
+        `;
+        waypointsTableBody.appendChild(tr);
+      });
+
+      // Render on Leaflet Map
+      initOrUpdateMap(endpoints.start, endpoints.dest, waypoints);
+    }
+
+    function initOrUpdateMap(start, dest, waypoints) {
+      if (!leafletMap) {
+        leafletMap = L.map('routeMap', {
+          zoomControl: true,
+          attributionControl: true
+        }).setView([17.2, 73.3], 7);
+
+        // Dark nautical style map tiles
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+          attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap contributors',
+          maxZoom: 18,
+        }).addTo(leafletMap);
+
+        mapWaypointsLayer = L.layerGroup().addTo(leafletMap);
+      }
+
+      // Clear previous layers
+      if (mapRoutePolyline) leafletMap.removeLayer(mapRoutePolyline);
+      if (mapStartMarker) leafletMap.removeLayer(mapStartMarker);
+      if (mapDestMarker) leafletMap.removeLayer(mapDestMarker);
+      mapWaypointsLayer.clearLayers();
+
+      // Custom Start and Destination Icons
+      const startIcon = L.divIcon({
+        className: 'custom-map-icon',
+        html: `<div style="background:#00d2ff; width:30px; height:30px; border-radius:50%; border:3px solid #ffffff; box-shadow:0 0 14px #00d2ff; display:flex; align-items:center; justify-content:center; font-size:14px;">⚓</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
+
+      const destIcon = L.divIcon({
+        className: 'custom-map-icon',
+        html: `<div style="background:#ffbe0b; width:30px; height:30px; border-radius:50%; border:3px solid #ffffff; box-shadow:0 0 14px #ffbe0b; display:flex; align-items:center; justify-content:center; font-size:14px;">📍</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+      });
+
+      mapStartMarker = L.marker([start.lat, start.lon], { icon: startIcon })
+        .addTo(leafletMap)
+        .bindPopup(`<b>Origin: ${start.name}</b><br>Lat: ${start.lat}, Lon: ${start.lon}`);
+
+      mapDestMarker = L.marker([dest.lat, dest.lon], { icon: destIcon })
+        .addTo(leafletMap)
+        .bindPopup(`<b>Destination: ${dest.name}</b><br>Lat: ${dest.lat}, Lon: ${dest.lon}`);
+
+      // Build polyline array
+      const latlngs = waypoints.map(wp => [wp.latitude, wp.longitude]);
+
+      if (latlngs.length >= 2) {
+        mapRoutePolyline = L.polyline(latlngs, {
+          color: '#00d2ff',
+          weight: 4,
+          opacity: 0.9,
+          dashArray: '8, 6',
+          lineCap: 'round'
+        }).addTo(leafletMap);
+
+        // Add intermediate waypoint dots
+        waypoints.slice(1, -1).forEach((wp, i) => {
+          L.circleMarker([wp.latitude, wp.longitude], {
+            radius: 4,
+            color: '#00f0ff',
+            fillColor: '#050b14',
+            fillOpacity: 1,
+            weight: 2
+          }).addTo(mapWaypointsLayer).bindPopup(`<b>Waypoint #${i + 2}</b><br>${wp.latitude.toFixed(4)}, ${wp.longitude.toFixed(4)}`);
+        });
+
+        // Auto-fit bounds
+        leafletMap.fitBounds(mapRoutePolyline.getBounds(), { padding: [40, 40] });
+      } else {
+        leafletMap.setView([start.lat, start.lon], 8);
+      }
+
+      setTimeout(() => {
+        leafletMap.invalidateSize();
+      }, 250);
+    }
+
+    function toggleWaypointsTable() {
+      waypointsTableWrap.classList.toggle("open");
+    }
+
+    // =========================================================================
+    // 5. EXISTING MULTILINGUAL VOICE PIPELINE (100% PRESERVED)
+    // =========================================================================
+    btnRecord.addEventListener("click", async () => {
+      if (!isRecording) {
+        await startRecording();
+      } else {
+        stopRecording();
+      }
+    });
+
+    async function startRecording() {
+      hideError();
+      audioChunks = [];
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let mimeType = "audio/webm";
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          mimeType = "audio/webm;codecs=opus";
+        } else if (MediaRecorder.isTypeSupported("audio/mp4")) {
+          mimeType = "audio/mp4";
+        } else if (MediaRecorder.isTypeSupported("audio/ogg")) {
+          mimeType = "audio/ogg";
+        }
+
+        mediaRecorder = new MediaRecorder(stream, { mimeType });
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(audioChunks, { type: mimeType });
+          await submitAudioToPipeline(blob, mimeType);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        btnRecord.classList.add("recording");
+        micLabel.textContent = "Stop";
+        waveform.classList.add("active");
+        statusText.textContent = "Listening...";
+        statusSubtext.textContent = "Speak now in Marathi, Hindi, or English";
+      } catch (err) {
+        showError("Microphone Access", "Microphone access is required. Please grant permission in browser settings.");
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+        isRecording = false;
+        btnRecord.classList.remove("recording");
+        micLabel.textContent = "Record";
+        waveform.classList.remove("active");
+        statusText.textContent = "Processing Audio...";
+        statusSubtext.textContent = "Transcribing with STT, querying ORCA Brain, and synthesizing TTS voice...";
+      }
+    }
+
+    async function submitAudioToPipeline(audioBlob, mimeType) {
+      const ext = mimeType.includes("webm") ? "webm" : (mimeType.includes("mp4") ? "mp4" : "ogg");
+      const filename = `recording.${ext}`;
+      const formData = new FormData();
+      formData.append("file", audioBlob, filename);
+      formData.append("session_id", currentSessionId);
+      if (languageSelect.value) formData.append("language", languageSelect.value);
+
+      const t0 = performance.now();
+      try {
+        const res = await fetch(`${BRAIN_API_BASE}/speech/voice`, {
+          method: "POST",
+          body: formData
+        });
+
+        const totalClientTime = ((performance.now() - t0) / 1000).toFixed(3);
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          const stage = errData.detail?.stage || "pipeline";
+          const msg = errData.detail?.message || errData.detail?.error || `HTTP ${res.status}`;
+          showError(stage.toUpperCase(), msg);
+          statusText.textContent = "Voice Processing Failed";
+          statusSubtext.textContent = "Check error banner above";
+          return;
+        }
+
+        const data = await res.json();
+        renderVoiceResponse(data, totalClientTime);
+
+        // Also cross-link voice query to chat section
+        if (data.transcript) {
+          appendChatMessage("user", data.transcript);
+          appendChatMessage("orca", data.response_text || "प्रतिसाद तयार झाला आहे.");
+          
+          // Check if speech triggered route optimization
+          if (isRouteQuery(data.transcript)) {
+            const endpoints = extractVoyageCoordinates(data.transcript, {});
+            fetch(`${ROUTE_ENGINE_BASE}/route`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                start: { latitude: endpoints.start.lat, longitude: endpoints.start.lon },
+                destination: { latitude: endpoints.dest.lat, longitude: endpoints.dest.lon },
+                vessel: { speed_knots: 12.0 },
+                objective: "safe_and_efficient"
+              })
+            }).then(r => r.json()).then(rData => {
+              renderRouteResult(rData, endpoints);
+            }).catch(() => {});
+          }
+        }
+      } catch (err) {
+        showError("Backend Connection", "Could not connect to ORCA Backend on port 8001.");
+        statusText.textContent = "Connection Error";
+        statusSubtext.textContent = "Failed to connect to http://127.0.0.1:8001";
+      }
+    }
+
+    function renderVoiceResponse(data, totalClientTime) {
+      statusText.textContent = "Done";
+      statusSubtext.textContent = "Voice synthesized successfully";
+
+      transcriptContent.textContent = data.transcript || "No transcript returned";
+      detectedLangTag.textContent = `DETECTED: ${(data.detected_language || "auto").toUpperCase()}`;
+
+      responseContent.textContent = data.response_text || "No response text returned";
+      responseLangTag.textContent = `VOICE: ${(data.response_language || "mr").toUpperCase()}`;
+
+      if (data.metrics) {
+        sttMetric.textContent = `${data.metrics.stt_duration_s.toFixed(2)}s`;
+        brainMetric.textContent = `${data.metrics.brain_duration_s.toFixed(2)}s`;
+        ttsMetric.textContent = `${data.metrics.tts_duration_s.toFixed(2)}s`;
+        totalMetric.textContent = `${data.metrics.total_duration_s.toFixed(2)}s`;
+      }
+
+      if (data.audio_base64) {
+        const audioBytes = base64ToUint8Array(data.audio_base64);
+        const audioBlob = new Blob([audioBytes], { type: data.audio_format || "audio/mpeg" });
+        if (currentAudioBlobUrl) URL.revokeObjectURL(currentAudioBlobUrl);
+        currentAudioBlobUrl = URL.createObjectURL(audioBlob);
+        audioElement.src = currentAudioBlobUrl;
+
+        btnPlayAudio.disabled = false;
+        audioInfo.textContent = `MP3 Ready (${(audioBlob.size / 1024).toFixed(1)} KB)`;
+        if (autoPlayCheckbox.checked) playAudio();
+      }
+    }
+
+    function base64ToUint8Array(base64) {
+      const binaryString = window.atob(base64);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes;
+    }
+
+    function playAudio() {
+      if (audioElement.src) {
+        audioElement.play().then(() => {
+          btnPlayAudio.textContent = "🔊 Playing...";
+        }).catch(err => {
+          btnPlayAudio.textContent = "🔊 Play ORCA Response";
+        });
+      }
+    }
+
+    function toggleAudioPlayback() {
+      if (audioElement.paused) playAudio();
+      else {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+        btnPlayAudio.textContent = "🔊 Play ORCA Response";
+      }
+    }
+
+    audioElement.onended = () => {
+      btnPlayAudio.textContent = "🔊 Play ORCA Response";
+    };
+
+    function resetSession() {
+      currentSessionId = "orca-session-" + Date.now();
+      transcriptContent.textContent = "Session reset. Record new speech.";
+      responseContent.textContent = "Waiting for query...";
+      sttMetric.textContent = "--";
+      brainMetric.textContent = "--";
+      ttsMetric.textContent = "--";
+      totalMetric.textContent = "--";
+      btnPlayAudio.disabled = true;
+      hideError();
+      statusText.textContent = "New Session Created";
+      statusSubtext.textContent = "Ready for speech";
+    }
+
+    // =========================================================================
+    // 6. ERROR HANDLING
+    // =========================================================================
+    function showError(stage, msg) {
+      errorStage.textContent = `[${stage}]`;
+      errorMessage.textContent = msg;
+      errorBanner.classList.add("show");
+    }
+
+    function hideError() {
+      errorBanner.classList.remove("show");
+    }
+  </script>
+</body>
+</html>

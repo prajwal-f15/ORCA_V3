@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ORCA V3 Route Engine — Marine Navigation Testing Console</title>
+  
+  <!-- Leaflet Map CSS via CDN -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  
+  <!-- Custom Marine Navigation Styles -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="marine-theme">
+  <div class="app-shell">
+    
+    <!-- Top Maritime Navigation Bar -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="brand-logo">⚓</div>
+        <div class="brand-info">
+          <div class="brand-title">ORCA V3 ROUTE ENGINE</div>
+          <div class="brand-subtitle">Marine Geographic & Autonomous Voyage Console</div>
+        </div>
+      </div>
+
+      <!-- Live Status Indicators -->
+      <div class="navbar-status-group">
+        <div class="status-pill" id="backendStatusPill" title="FastAPI Backend Health">
+          <span class="status-dot disconnected" id="backendStatusDot"></span>
+          <span class="status-label" id="backendStatusText">Backend: Connecting...</span>
+        </div>
+        
+        <div class="status-pill" id="gpsStatusPill" title="Browser Geolocation Status">
+          <span class="status-dot inactive" id="gpsStatusDot"></span>
+          <span class="status-label" id="gpsStatusText">GPS: Inactive</span>
+        </div>
+
+        <div class="status-pill trip-pill hidden" id="activeTripPill">
+          <span class="status-dot active"></span>
+          <span class="status-label" id="activeTripLabel">Active Trip</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Workspace: Split Sidebar + Map Display -->
+    <div class="workspace-grid">
+      
+      <!-- Left Control Panel -->
+      <aside class="sidebar">
+        
+        <!-- Navigation Tab Selector -->
+        <nav class="sidebar-tabs" role="tablist">
+          <button class="tab-btn active" data-tab="tab-routing" id="tabRoutingBtn">Route Planning</button>
+          <button class="tab-btn" data-tab="tab-trip" id="tabTripBtn">Voyage Tracking</button>
+          <button class="tab-btn" data-tab="tab-return" id="tabReturnBtn">Return Nav</button>
+          <button class="tab-btn" data-tab="tab-history" id="tabHistoryBtn">Trip History</button>
+          <button class="tab-btn" data-tab="tab-geography" id="tabGeographyBtn">Marine Data</button>
+        </nav>
+
+        <!-- TAB 1: ROUTE PLANNING -->
+        <section class="tab-content active" id="tab-routing">
+          <div class="section-header">
+            <h3>Maritime Route Optimization</h3>
+            <select id="routePresetSelect" class="input-sm select-preset">
+              <option value="" disabled selected>⚡ Sample Marine Routes...</option>
+              <option value="mumbai-goa">Mumbai Port → Goa (Panaji) [~394 km]</option>
+              <option value="chennai-portblair">Chennai → Port Blair (Andaman) [~1,360 km]</option>
+              <option value="kochi-lakshadweep">Kochi → Kavaratti (Lakshadweep) [~400 km]</option>
+              <option value="gujarat-mumbai">Kandla (Gujarat) → Mumbai [~540 km]</option>
+              <option value="visakhapatnam-chennai">Visakhapatnam → Chennai [~600 km]</option>
+              <option value="zero-distance">Zero Distance Boundary Test [0 km]</option>
+            </select>
+          </div>
+
+          <!-- Map Click Target Selection Mode -->
+          <div class="map-picker-banner">
+            <span class="picker-label">Map Click Target:</span>
+            <div class="btn-group">
+              <button type="button" class="btn-toggle active" id="pickStartBtn">⚓ Set Start</button>
+              <button type="button" class="btn-toggle" id="pickDestBtn">📍 Set Dest</button>
+              <button type="button" class="btn-toggle" id="pickHarbourBtn">🏛️ Set Harbour</button>
+            </div>
+          </div>
+
+          <form id="routeForm" class="control-form" novalidate>
+            <!-- Start Position -->
+            <fieldset class="form-group-box">
+              <legend>⚓ Origin (Start Location)</legend>
+              <div class="coord-row">
+                <div class="input-field">
+                  <label for="startLat">Latitude (°N/S)</label>
+                  <input type="number" id="startLat" step="any" min="-90" max="90" placeholder="18.9220" required value="18.9220">
+                </div>
+                <div class="input-field">
+                  <label for="startLon">Longitude (°E/W)</label>
+                  <input type="number" id="startLon" step="any" min="-180" max="180" placeholder="72.8347" required value="72.8347">
+                </div>
+              </div>
+              <button type="button" class="btn-link" id="useMyLocationStartBtn">🎯 Use My GPS Location</button>
+            </fieldset>
+
+            <!-- Destination Position -->
+            <fieldset class="form-group-box">
+              <legend>📍 Destination</legend>
+              <div class="coord-row">
+                <div class="input-field">
+                  <label for="destLat">Latitude (°N/S)</label>
+                  <input type="number" id="destLat" step="any" min="-90" max="90" placeholder="15.4909" required value="15.4909">
+                </div>
+                <div class="input-field">
+                  <label for="destLon">Longitude (°E/W)</label>
+                  <input type="number" id="destLon" step="any" min="-180" max="180" placeholder="73.8278" required value="73.8278">
+                </div>
+              </div>
+            </fieldset>
+
+            <!-- Vessel Parameters -->
+            <fieldset class="form-group-box">
+              <legend>🚢 Vessel Kinematics & Objective</legend>
+              <div class="coord-row">
+                <div class="input-field">
+                  <label for="vesselSpeed">Cruise Speed (knots)</label>
+                  <input type="number" id="vesselSpeed" step="0.1" min="0.1" max="60" value="12.5" required>
+                </div>
+                <div class="input-field">
+                  <label for="routeObjective">Routing Profile</label>
+                  <select id="routeObjective">
+                    <option value="safe_and_efficient" selected>Safe &amp; Efficient</option>
+                    <option value="nearest_destination">Nearest Destination</option>
+                    <option value="fastest_arrival">Fastest Arrival</option>
+                    <option value="lowest_fuel">Fuel Optimization</option>
+                    <option value="highest_potential">Highest Fishing Potential</option>
+                  </select>
+                </div>
+              </div>
+              <div class="coord-row mt-1">
+                <div class="input-field">
+                  <label for="vesselDraft">Vessel Draft (meters)</label>
+                  <input type="number" id="vesselDraft" step="0.1" min="0.1" placeholder="e.g. 2.5">
+                </div>
+                <div class="input-field">
+                  <label for="minSafeDepth">Min Safe Depth (m)</label>
+                  <input type="number" id="minSafeDepth" step="0.1" min="0.1" placeholder="e.g. 4.0">
+                </div>
+              </div>
+            </fieldset>
+
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary" id="calculateRouteBtn">
+                <span>🧭 Calculate Route (POST /route)</span>
+              </button>
+              <button type="button" class="btn btn-secondary" id="swapCoordinatesBtn" title="Swap Start & Destination">⇄ Swap</button>
+            </div>
+          </form>
+
+          <!-- Calculated Route Summary Card -->
+          <div class="result-card hidden" id="calculatedRouteCard">
+            <div class="card-title-bar">
+              <div style="display: flex; gap: 6px; align-items: center;">
+                <span class="badge badge-success" id="calcRouteStatus">OPTIMIZED</span>
+                <span class="badge" id="calcSafetyBadge">ALLOW</span>
+              </div>
+              <span class="text-muted" id="calcRouteId">route_id</span>
+            </div>
+            
+            <div class="telemetry-stat-grid">
+              <div class="stat-cell">
+                <span class="stat-label">Distance (km)</span>
+                <span class="stat-value highlight" id="calcDistKm">0.0 km</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Distance (NM)</span>
+                <span class="stat-value highlight" id="calcDistNm">0.0 NM</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">ETA</span>
+                <span class="stat-value" id="calcEta">0 mins</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Route Score</span>
+                <span class="stat-value" id="calcScore">100.0</span>
+              </div>
+            </div>
+
+            <!-- Environmental Data Sources Banner -->
+            <div class="mt-1" style="display: flex; gap: 6px; justify-content: space-between; font-size: 10px; color: var(--text-muted);">
+              <span>Ocean: <span class="source-tag" id="calcOceanSource">MOCK</span></span>
+              <span>Weather: <span class="source-tag" id="calcWeatherSource">MOCK</span></span>
+              <span>PFZ: <span class="source-tag" id="calcPfzSource">TESTING</span></span>
+            </div>
+
+            <!-- Safety Evaluation & Blocking Reasons Container -->
+            <div id="calcSafetyDetails" class="safety-alert-box allow mt-1 hidden">
+              <div id="calcSafetyTitle" style="font-weight: 700;">Safety Clearance: ALLOW</div>
+              <div id="calcSafetyMessages" style="margin-top: 4px; font-size: 11px;">All navigation safety checks passed.</div>
+            </div>
+
+            <!-- Start Trip Button from calculated route -->
+            <button type="button" class="btn btn-accent full-width mt-2" id="startTripFromRouteBtn">
+              🚀 Launch Voyage (POST /trips/start)
+            </button>
+          </div>
+        </section>
+
+        <!-- TAB 2: VOYAGE & TRIP TRACKING -->
+        <section class="tab-content" id="tab-trip">
+          <div class="section-header">
+            <h3>Live Voyage Tracking</h3>
+            <span class="badge" id="tripStateBadge">NO ACTIVE TRIP</span>
+          </div>
+
+          <!-- Active Trip Details -->
+          <div id="noActiveTripView" class="empty-state-box">
+            <p>No active voyage currently tracking. Calculate a route or start a new trip below.</p>
+            <button type="button" class="btn btn-primary" id="quickStartTripBtn">Start New Trip Now</button>
+          </div>
+
+          <div id="activeTripView" class="active-trip-panel hidden">
+            <!-- Trip Header Telemetry -->
+            <div class="trip-id-bar">
+              <div>
+                <span class="stat-label">Trip Identifier</span>
+                <div class="trip-code" id="activeTripId">trip_none</div>
+              </div>
+              <button type="button" class="btn btn-danger btn-sm" id="stopTripBtn">🛑 Stop Trip</button>
+            </div>
+
+            <!-- Real-time Navigation Telemetry -->
+            <div class="telemetry-stat-grid">
+              <div class="stat-cell">
+                <span class="stat-label">Travelled (km)</span>
+                <span class="stat-value" id="tripTravelledKm">0.00 km</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Travelled (NM)</span>
+                <span class="stat-value" id="tripTravelledNm">0.00 NM</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Remaining (NM)</span>
+                <span class="stat-value highlight" id="tripRemainingNm">0.00 NM</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Bearing</span>
+                <span class="stat-value" id="tripBearing">0.0°</span>
+              </div>
+            </div>
+
+            <!-- Progress Bar -->
+            <div class="progress-container">
+              <div class="progress-labels">
+                <span>Voyage Progress</span>
+                <span id="tripProgressPercent">0.0%</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="tripProgressBar" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Live GPS Position Controls -->
+            <fieldset class="form-group-box mt-2">
+              <legend>📡 GPS Position Update</legend>
+              <div class="coord-row">
+                <div class="input-field">
+                  <label for="gpsUpdateLat">Current Lat</label>
+                  <input type="number" id="gpsUpdateLat" step="any" placeholder="18.9220">
+                </div>
+                <div class="input-field">
+                  <label for="gpsUpdateLon">Current Lon</label>
+                  <input type="number" id="gpsUpdateLon" step="any" placeholder="72.8347">
+                </div>
+              </div>
+
+              <div class="btn-grid mt-1">
+                <button type="button" class="btn btn-secondary btn-sm" id="sendManualGpsBtn">Update GPS (POST /update)</button>
+                <button type="button" class="btn btn-secondary btn-sm" id="stepAlongRouteBtn">▶ Step Forward 10%</button>
+              </div>
+              
+              <div class="btn-grid mt-1">
+                <button type="button" class="btn btn-outline btn-sm" id="toggleLiveBrowserGpsBtn">🌐 Stream Browser GPS</button>
+                <button type="button" class="btn btn-outline btn-sm" id="toggleSimulatedVoyageBtn">⚡ Auto-Simulate Voyage</button>
+              </div>
+            </fieldset>
+
+            <!-- Next Waypoint & ETA Details -->
+            <div class="nav-target-box mt-2">
+              <div class="target-row">
+                <span class="stat-label">Next Target:</span>
+                <span class="target-val" id="tripNextTarget">Destination</span>
+              </div>
+              <div class="target-row">
+                <span class="stat-label">Est. Time Remaining:</span>
+                <span class="target-val highlight" id="tripEtaMinutes">0.0 mins</span>
+              </div>
+              <div class="target-row">
+                <span class="stat-label">Track Points Count:</span>
+                <span class="target-val" id="tripTrackCount">1 Point</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 3: RETURN NAVIGATION (STEP 8) -->
+        <section class="tab-content" id="tab-return">
+          <div class="section-header">
+            <h3>Return-to-Start / Harbour</h3>
+            <span class="badge" id="returnStatusBadge">NOT RETURNING</span>
+          </div>
+
+          <div class="form-group-box">
+            <label class="stat-label">Select Return Target Mode:</label>
+            <div class="radio-toggle-group">
+              <label class="radio-card">
+                <input type="radio" name="returnMode" value="start" checked id="returnModeStart">
+                <div class="radio-card-content">
+                  <span class="radio-title">⚓ Return to Start</span>
+                  <span class="radio-desc">Head back to the original voyage origin coordinate.</span>
+                </div>
+              </label>
+
+              <label class="radio-card">
+                <input type="radio" name="returnMode" value="harbour" id="returnModeHarbour">
+                <div class="radio-card-content">
+                  <span class="radio-title">🏛️ Return to Harbour</span>
+                  <span class="radio-desc">Head to a designated safe harbour or landing shelter.</span>
+                </div>
+              </label>
+            </div>
+
+            <!-- Harbour Coordinate Form (Shown when harbour selected) -->
+            <div id="harbourInputContainer" class="coord-row mt-2 hidden">
+              <div class="input-field">
+                <label for="harbourLat">Harbour Latitude</label>
+                <input type="number" id="harbourLat" step="any" placeholder="18.9500" value="18.9500">
+              </div>
+              <div class="input-field">
+                <label for="harbourLon">Harbour Longitude</label>
+                <input type="number" id="harbourLon" step="any" placeholder="72.8200" value="72.8200">
+              </div>
+            </div>
+
+            <div class="btn-grid mt-2">
+              <button type="button" class="btn btn-warning" id="startReturnBtn">🔄 Start Return Navigation</button>
+              <button type="button" class="btn btn-secondary" id="cancelReturnBtn">❌ Cancel Return</button>
+            </div>
+          </div>
+
+          <!-- Live Return Navigation Telemetry -->
+          <div id="returnTelemetryCard" class="result-card mt-2 hidden">
+            <div class="card-title-bar">
+              <span class="badge badge-warning" id="retNavStateBadge">RETURNING</span>
+              <span class="text-muted" id="retTargetCoord">-</span>
+            </div>
+
+            <div class="telemetry-stat-grid">
+              <div class="stat-cell">
+                <span class="stat-label">Return Dist (NM)</span>
+                <span class="stat-value highlight" id="retDistNm">0.0 NM</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Return Dist (km)</span>
+                <span class="stat-value" id="retDistKm">0.0 km</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Return Bearing</span>
+                <span class="stat-value" id="retBearing">0.0°</span>
+              </div>
+              <div class="stat-cell">
+                <span class="stat-label">Return ETA</span>
+                <span class="stat-value" id="retEta">0.0 mins</span>
+              </div>
+            </div>
+
+            <div class="progress-container mt-1">
+              <div class="progress-labels">
+                <span>Return Progress</span>
+                <span id="retProgressPercent">0.0%</span>
+              </div>
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill progress-return" id="retProgressBar" style="width: 0%"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- TAB 4: TRIP HISTORY (STEP 7) -->
+        <section class="tab-content" id="tab-history">
+          <div class="section-header">
+            <h3>Persistent Voyage History</h3>
+            <button type="button" class="btn btn-icon-sm" id="refreshHistoryBtn" title="Refresh Trip History">🔄</button>
+          </div>
+
+          <div class="filter-row">
+            <select id="historyStatusFilter" class="input-sm">
+              <option value="">All Voyages (Active & Completed)</option>
+              <option value="active">Active Voyages Only</option>
+              <option value="completed">Completed Voyages Only</option>
+            </select>
+          </div>
+
+          <div class="history-list-container" id="tripHistoryList">
+            <div class="loading-spinner-box">Loading saved trips...</div>
+          </div>
+        </section>
+
+        <!-- TAB 5: MARINE GEOGRAPHY (STEP 9, 11 & 12) -->
+        <section class="tab-content" id="tab-geography">
+          <div class="section-header">
+            <h3>Marine Geographic Layers</h3>
+            <button type="button" class="btn btn-icon-sm" id="refreshGeographyBtn" title="Reload Datasets">🔄</button>
+          </div>
+
+          <!-- Layer Toggles -->
+          <div class="form-group-box">
+            <label class="stat-label">Official Marine Map Layers:</label>
+            <div class="layer-toggles-grid">
+              <label class="layer-toggle-item">
+                <input type="checkbox" id="layerTogglePorts">
+                <span class="layer-badge badge-port">🚢 Ports</span>
+              </label>
+              <label class="layer-toggle-item">
+                <input type="checkbox" id="layerToggleHarbours">
+                <span class="layer-badge badge-harbour">⚓ Harbours</span>
+              </label>
+              <label class="layer-toggle-item">
+                <input type="checkbox" id="layerToggleLandingCentres">
+                <span class="layer-badge badge-landing">🐟 Landing Centres</span>
+              </label>
+              <label class="layer-toggle-item">
+                <input type="checkbox" id="layerToggleLighthouses">
+                <span class="layer-badge badge-lighthouse">🚨 Lighthouses</span>
+              </label>
+              <label class="layer-toggle-item">
+                <input type="checkbox" id="layerToggleBathymetry">
+                <span class="layer-badge badge-bathymetry">🌊 Bathymetry</span>
+              </label>
+              <label class="layer-toggle-item">
+                <input type="checkbox" id="layerToggleRestrictedAreas">
+                <span class="layer-badge badge-restricted">🚫 Restricted Areas</span>
+              </label>
+            </div>
+            <div class="layer-status-note">
+              <small class="text-muted">Only authoritative records in database are displayed. 0 fake markers or synthetic zones.</small>
+            </div>
+          </div>
+
+          <!-- Nearby Search Tool -->
+          <div class="form-group-box mt-2">
+            <label class="stat-label">Nearby Facilities Scanner:</label>
+            <div class="coord-row">
+              <div class="input-field">
+                <label for="nearbyLat">Latitude</label>
+                <input type="number" id="nearbyLat" step="any" placeholder="18.9220" value="18.9220">
+              </div>
+              <div class="input-field">
+                <label for="nearbyLon">Longitude</label>
+                <input type="number" id="nearbyLon" step="any" placeholder="72.8347" value="72.8347">
+              </div>
+            </div>
+            <div class="coord-row mt-1">
+              <div class="input-field">
+                <label for="nearbyType">Facility Category</label>
+                <select id="nearbyType" class="input-sm">
+                  <option value="">All Categories</option>
+                  <option value="port">Ports Only</option>
+                  <option value="harbour">Harbours Only</option>
+                  <option value="landing_centre">Landing Centres Only</option>
+                  <option value="lighthouse">Lighthouses Only</option>
+                </select>
+              </div>
+              <div class="input-field">
+                <label for="nearbyRadius">Radius (km)</label>
+                <input type="number" id="nearbyRadius" step="any" min="1" max="2000" value="50">
+              </div>
+            </div>
+            <div class="btn-grid mt-1">
+              <button type="button" class="btn btn-primary btn-sm" id="searchNearbyBtn">🔍 Scan Nearby Facilities</button>
+              <button type="button" class="btn btn-secondary btn-sm" id="useStartNearbyBtn">⚓ Use Route Origin</button>
+            </div>
+          </div>
+
+          <!-- Nearby Results List -->
+          <div id="nearbyResultsContainer" class="nearby-results-container mt-2 hidden">
+            <div class="section-header">
+              <h4>Scan Results</h4>
+              <span class="badge" id="nearbyCountBadge">0 Found</span>
+            </div>
+            <div class="nearby-list" id="nearbyList"></div>
+          </div>
+
+          <!-- Registered Datasets Catalog -->
+          <div class="mt-2">
+            <div class="section-header">
+              <h4>Registered Datasets</h4>
+            </div>
+            <div class="geography-dataset-list" id="geographyDatasetList">
+              <div class="loading-spinner-box">Loading registered datasets...</div>
+            </div>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Right Map Display & Live Canvas -->
+      <main class="map-viewport">
+        <!-- Telemetry HUD Overlay (Top of Map) -->
+        <div class="telemetry-hud">
+          <div class="hud-item">
+            <span class="hud-label">VESSEL SPEED</span>
+            <span class="hud-value" id="hudSpeed">12.5 <small>kts</small></span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">BEARING</span>
+            <span class="hud-value" id="hudBearing">---°</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">REMAINING DIST</span>
+            <span class="hud-value" id="hudDistance">0.0 <small>NM</small></span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">EST. ARRIVAL</span>
+            <span class="hud-value highlight" id="hudEta">--:--</span>
+          </div>
+          <div class="hud-item">
+            <span class="hud-label">STATUS</span>
+            <span class="hud-value badge-hud" id="hudStatus">STANDBY</span>
+          </div>
+        </div>
+
+        <!-- Leaflet Map Container -->
+        <div id="marineMap" class="map-container"></div>
+
+        <!-- Floating Map Controls -->
+        <div class="map-floating-controls">
+          <button type="button" class="btn-map-control" id="recenterIndiaBtn" title="Recenter on India Marine Waters">🇮🇳 India View</button>
+          <button type="button" class="btn-map-control" id="fitRouteBtn" title="Fit Map Bounds to Route">🔍 Fit Route</button>
+          <button type="button" class="btn-map-control" id="clearMapOverlaysBtn" title="Clear Map Overlays">🧹 Clear Map</button>
+        </div>
+
+        <!-- Bottom Collapsible Response / Logs Drawer -->
+        <div class="logs-drawer" id="logsDrawer">
+          <div class="drawer-header" id="drawerToggle">
+            <div class="drawer-title">
+              <span class="drawer-icon">⚡</span>
+              <span>API Telemetry & Response Inspector</span>
+            </div>
+            <span class="drawer-arrow">▲</span>
+          </div>
+          <div class="drawer-body" id="drawerBody">
+            <pre><code id="liveLogCode">// Ready for Route Engine API interactions...</code></pre>
+          </div>
+        </div>
+      </main>
+
+    </div>
+
+    <!-- Alert / Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+  </div>
+
+  <!-- Leaflet JavaScript via CDN -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Frontend Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
